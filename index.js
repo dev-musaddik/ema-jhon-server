@@ -65,6 +65,19 @@ async function run() {
       const data = await productCollection.find({key:{$in : keys}}).toArray();
       res.send(data);
     });
+    app.post("/order", async (req, res) => {
+      try {
+          const userEmail = req.body.email; // Assuming req.body is a string containing the email
+          const userOrder = await shipmentCollection.find({ email: userEmail }).toArray();
+          res.send(userOrder);
+      } catch (error) {
+          console.error(error);
+          res.status(500).send("Internal Server Error");
+      }
+  });
+  app.get('/',(req,res)=>{
+    res.status(200).send('server is working');
+  })
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
     );
