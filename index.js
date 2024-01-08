@@ -1,86 +1,103 @@
 const bodyParser = require("body-parser");
 const express = require("express");
-const app = express();
+const { MongoClient, ServerApiVersion } = require("mongodb");
 require("dotenv").config();
 const cors = require("cors");
-const { MongoClient, ServerApiVersion } = require("mongodb");
-const uri = `mongodb+srv://${process.env.DB_USERNAME}:${process.env.DB_PASSWORD}@cluster0.nprosog.mongodb.net/${process.env.DB_NAME}?retryWrites=true&w=majority`;
+const app = express();
+const port = 4000;
+
+// Middleware
 app.use(bodyParser.json());
 app.use(cors());
-// app.use(express.json())
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
+
+// MongoDB connection
+const uri = `mongodb+srv://${process.env.DB_USERNAME}:${process.env.DB_PASSWORD}@cluster0.nprosog.mongodb.net/${process.env.DB_NAME}?retryWrites=true&w=majority`;
+
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
     strict: true,
     deprecationErrors: true,
   },
+  maxPoolSize: 10, // Adjust based on your needs
 });
 
 async function run() {
   try {
-    // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
-    // Send a ping to confirm a successful connection
     const productCollection = client.db(process.env.DB_NAME).collection("products");
     const shipmentCollection = client.db(process.env.DB_NAME).collection("shipment");
 
-    app.post('/shipment',(req,res)=>{
-      const shipment =  req.body
+    // API routes
+    app.post('/shipment', (req, res) => {
+      const shipment = req.body;
       shipmentCollection.insertOne(shipment)
-      .then(result=>{
-        console.log(result)
-        res.send(result.acknowledged)
-      })
-      .catch(err=>{
-        console.log(err)
-      })
-      // console.log(shipment)
-    })
-    app.post("/addProduct", (req, res) => {
-      const product = req.body;
-      productCollection
-        .insertMany(product)
-        .then((ans) => {
-          res.send(ans);
-          console.log(ans);
+        .then(result => {
+          console.log(result);
+          res.send(result.acknowledged);
         })
-        .catch((err) => {
+        .catch(err => {
           console.log(err);
+          res.status(500).send("Internal Server Error");
         });
-      // console.log(product)
     });
 
-    // -----------------
+    app.post("/addProduct", async (req, res) => {
+      const product = req.body;
+      try {
+        const ans = await productCollection.insertMany(product);
+        res.send(ans);
+        console.log(ans);
+      } catch (err) {
+        console.log(err);
+        res.status(500).send("Internal Server Error");
+      }
+    });
+
     app.get("/getProduct", async (req, res) => {
       const data = await productCollection.find().toArray();
       res.send(data);
     });
+
+    app.get('/getUser', async (req, res) => {
+      const user = await shipmentCollection.find().toArray();
+      res.send(user);
+    });
+
     app.get("/getProduct/:key", async (req, res) => {
-      const data = await productCollection.find({key:req.params.key}).toArray();
+      const data = await productCollection.find({ key: req.params.key }).toArray();
       res.send(data[0]);
     });
+
     app.post("/getProductByKeys", async (req, res) => {
-      const keys=req.body;
-      const data = await productCollection.find({key:{$in : keys}}).toArray();
+      const keys = req.body;
+      const data = await productCollection.find({ key: { $in: keys } }).toArray();
       res.send(data);
     });
+
     app.post("/order", async (req, res) => {
       try {
-          const userEmail = req.body.email; // Assuming req.body is a string containing the email
-          const userOrder = await shipmentCollection.find({ email: userEmail }).toArray();
-          res.send(userOrder);
+        const userEmail = req.body.email;
+        const userOrder = await shipmentCollection.find({ email: userEmail }).toArray();
+        res.send(userOrder);
       } catch (error) {
-          console.error(error);
-          res.status(500).send("Internal Server Error");
+        console.error(error);
+        res.status(500).send("Internal Server Error");
       }
-  });
-  app.get('/',(req,res)=>{
-    res.status(200).send('server is working');
-  })
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    });
+
+    // Error handling middleware
+    app.use((err, req, res, next) => {
+      console.error(err.stack);
+      res.status(500).send('Something went wrong!');
+    });
+
+    // Ping endpoint
+    app.get('/', (req, res) => {
+      res.status(200).send('Server is working');
+    });
+
+    console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } catch (error) {
     console.log(error);
   }
@@ -88,6 +105,6 @@ async function run() {
 
 run().catch(console.dir);
 
-app.listen(4000, () => {
-  console.log("server listening on port");
+app.listen(port, () => {
+  console.log(`Server listening on port ${port}`);
 });
